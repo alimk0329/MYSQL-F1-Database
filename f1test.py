@@ -1,43 +1,123 @@
 import fastf1
 import pandas as pd
 import time
+import os
 
-all_race_results = []
-all_qualifying_results = []
+output_file = "f1_qualifying_results_full.csv"
+
+wanted_race_columns = [
+    'DriverNumber',
+    'FullName',
+    'TeamName',
+    'Position',
+    'Status',
+    'Points'
+]
+
+wanted_qualifying_columns = [
+]
 
 
-wanted_race_columns = ['DriverNumber', 'FullName', 'Abbreviation', 'TeamName', 'Position', 'Status', 'Points']
+def fetch_race_session(year, session_num, event_name):
 
-def fetch_race_session(year,session_num, event_name, race_date):
     while True:
         try:
-            #fetches the session and copies it to results dataframe for editing
-            session = fastf1.get_session(year,session_num, 'R')
+            # fetch session
+            session = fastf1.get_session(year, session_num, 'R')
             session.load()
+
             results = session.results.copy()
 
-            #add null results
+            # add missing columns
             for col in wanted_race_columns:
                 if col not in results.columns:
                     results[col] = None
 
-            #get rid of columns not wanted 
+            # keep wanted columns
             results = results[wanted_race_columns].copy()
 
-            #add additional columns for session information
+            # add metadata
             results['RoundNumber'] = session_num
             results['EventName'] = event_name
-            results['EventDate'] = race_date
+            results['Year'] = year
 
-            #adds results to list of all results
-            all_race_results.append(results)
+            # append to CSV
+            file_exists = os.path.isfile(output_file)
+
+            results.to_csv(
+                output_file,
+                mode='a',
+                header=not file_exists,
+                index=False
+            )
+
+            print(f"SAVED: {year} Round {session_num} - {event_name}")
+
             break
+
         except Exception as e:
-            print(f"FAILED: {year} Round {round_number}")
+
+            # permanent invalid event
+            if "testing event" in str(e).lower():
+                print(f"Skipping testing event: {event_name}")
+                break
+
+            print(f"FAILED: {year} Round {session_num}")
             print(f"Reason: {e}")
             print("Waiting 15 minutes before retry...\n")
 
-            time.sleep(900)  # 900 seconds = 15 minutes
+            time.sleep(900)
+
+
+def fetch_quali_session(year, session_num, event_name):
+
+    while True:
+        try:
+            # fetch session
+            session = fastf1.get_session(year, session_num, 'Q')
+            session.load()
+
+            results = session.results.copy()
+
+            # add missing columns
+            for col in wanted_qualifying_columns:
+                if col not in results.columns:
+                    results[col] = None
+
+            # keep wanted columns
+            results = results[wanted_qualifying_columns].copy()
+
+            # add metadata
+            results['RoundNumber'] = session_num
+            results['EventName'] = event_name
+            results['Year'] = year
+
+            # append to CSV
+            file_exists = os.path.isfile(output_file)
+
+            results.to_csv(
+                output_file,
+                mode='a',
+                header=not file_exists,
+                index=False
+            )
+
+            print(f"SAVED: {year} Round {session_num} - {event_name}")
+
+            break
+
+        except Exception as e:
+
+            # permanent invalid event
+            if "testing event" in str(e).lower():
+                print(f"Skipping testing event: {event_name}")
+                break
+
+            print(f"FAILED: {year} Round {session_num}")
+            print(f"Reason: {e}")
+            print("Waiting 15 minutes before retry...\n")
+
+            time.sleep(900)
 
 
 
@@ -46,34 +126,40 @@ def fetch_race_session(year,session_num, event_name, race_date):
 
 
 
-for year in range(1950, 1955):
-    schedule = fastf1.get_event_schedule(year)
+
+for year in range(1950, 2026):
+
+    # retry schedule loading
+    while True:
+        try:
+            schedule = fastf1.get_event_schedule(year)
+            break
+
+        except Exception as e:
+            print(f"Failed loading schedule for {year}")
+            print(e)
+
+            print("Retrying in 15 minutes...\n")
+
+            time.sleep(900)
+
     for _, race in schedule.iterrows():
-            round_number = race.get('RoundNumber', None)
-            event_name = race.get('EventName', None)
-            race_date = race.get('EventDate', None)
-            try:
-                fetch_race_session(year, round_number, event_name, race_date)
 
-                print(f"Loaded {year} Round {round_number} - {event_name}")
-                time.sleep(2)  # Sleep for 2 seconds to avoid hitting API rate limits
+        round_number = race.get('RoundNumber', None)
+        event_name = race.get('EventName', None)
 
-            except Exception as e:
-                print(f"Failed {year} Round {round_number}: {e}")
-            
+        # skip invalid/testing events
+        if round_number is None or round_number == 0:
+            print(f"Skipping non-race event: {event_name}")
+            continue
 
+        fetch_race_session(
+            year,
+            round_number,
+            event_name
+        )
 
+        # small delay between requests
+        time.sleep(2)
 
-
-
-
-
-# combine all races
-df = pd.concat(all_race_results, ignore_index=True)
-
-
-# export
-df.to_excel('f1__race_results_full.xlsx', index=False)
-
-print("Saved to excel file f1_race_results_full.xlsx")
-
+print("Done")
