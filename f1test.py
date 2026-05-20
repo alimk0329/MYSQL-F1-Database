@@ -14,8 +14,10 @@ wanted_race_columns = [
     'Points'
 ]
 
-wanted_qualifying_columns = [
-]
+wanted_qualifying_columns = ['DriverNumber',
+    'FullName', 'TeamName',
+    'Q1', 'Q2', 'Q3', 'Time', 'Position']
+
 
 
 def fetch_race_session(year, session_num, event_name):
@@ -69,8 +71,13 @@ def fetch_race_session(year, session_num, event_name):
             time.sleep(900)
 
 
-def fetch_quali_session(year, session_num, event_name):
 
+session = fastf1.get_session(2025, 1, 'Q')
+session.load()
+print(session.results)
+
+
+def fetch_quali_session(year, session_num, event_name):
     while True:
         try:
             # fetch session
@@ -150,16 +157,13 @@ for year in range(1950, 2026):
 
         # skip invalid/testing events
         if round_number is None or round_number == 0:
-            print(f"Skipping non-race event: {event_name}")
+            print(f"Skipping non-qualifying event: {event_name}")
             continue
 
-        fetch_race_session(
-            year,
-            round_number,
-            event_name
-        )
+        fetch_quali_session(year, round_number, event_name)
 
         # small delay between requests
         time.sleep(2)
+
 
 print("Done")
